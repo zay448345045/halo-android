@@ -154,6 +154,15 @@ public final class TouchControls extends View implements SensorEventListener, In
     private static native int nativeRumble();
     private static native int nativeScene();
     private static native int nativeBindings(int[] controls);
+    private static native boolean nativeCheatRequest(int id, boolean enabled);
+    private static native int nativeCheatStatus(int id);
+
+    // (the startup cheats: init.txt's menu-owned section, applied on each map load)
+    private StartupCheats startupCheats;
+    private static final String[] CHEATS = {"Invincibility", "Jetpack", "Infinite ammo", "Bump possession",
+        "Super jump", "Reflexive damage", "Medusa", "Omnipotent", "Controller cheats", "Bottomless clip",
+        "Active camouflage (local player)", "Active camouflage", "All powerups", "All vehicles",
+        "All weapons", "Teleport to camera"};
 
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final SharedPreferences preferences;
@@ -251,6 +260,14 @@ public final class TouchControls extends View implements SensorEventListener, In
         inputManager = (InputManager) context.getSystemService(Context.INPUT_SERVICE);
         touchscreenFeature = context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN);
         preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE);
+        try {
+            java.io.File folder = context.getExternalFilesDir(null);
+            if (folder == null)
+                throw new java.io.IOException("Game storage is unavailable");
+            startupCheats = new StartupCheats(new java.io.File(folder, "init.txt").toPath());
+        } catch (java.io.IOException e) {
+            Toast.makeText(context, "Cannot read init.txt: "+e.getMessage(), Toast.LENGTH_LONG).show();
+        }
         loadLayout(context);
         hidden = preferences.getBoolean(KEY_HIDDEN, false);
         refreshInputDevices();
@@ -818,7 +835,7 @@ public final class TouchControls extends View implements SensorEventListener, In
     }
 
     private void showOptions() {
-        String[] items = {"General", "Edit buttons layout", "Look sensitivity"};
+        String[] items = {"General", "Edit buttons layout", "Look sensitivity", "Cheats"};
         AlertDialog dialog = new AlertDialog.Builder(getContext())
             .setTitle("Options")
             .setItems(items, (d, which) -> {
@@ -827,8 +844,10 @@ public final class TouchControls extends View implements SensorEventListener, In
                 } else if (which == 1) {
                     editing = true;
                     setHidden(false);
-                } else {
+                } else if (which == 2) {
                     post(this::showSensitivity);
+                } else {
+                    post(this::showCheats);
                 }
             })
             .setNegativeButton("Close", null)
@@ -1105,6 +1124,45 @@ public final class TouchControls extends View implements SensorEventListener, In
 
     private void toast(String message) {
         Toast.makeText(getContext(), message, Toast.LENGTH_LONG).show();
+    }
+
+    /** the game's cheats: a switch applied on each map load, or a command run now */
+    private void showCheats() {
+        LinearLayout panel = new LinearLayout(getContext());
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(24, 16, 24, 16);
+        panel.addView(text("The first ten apply from the next map on; the rest run in the game now."));
+        for (int i = 0; i < CHEATS.length; i++) {
+            final int id = i;
+            Switch cheat = new Switch(getContext());
+            cheat.setText(CHEATS[i]);
+            cheat.setChecked(startupCheats != null && startupCheats.enabled(id));
+            boolean enabledNow = i < 10 || nativeCheatStatus(id) == 1;
+            cheat.setEnabled(startupCheats != null || enabledNow);
+            cheat.setOnCheckedChangeListener((view, enabled) -> {
+                if (id < 10) {
+                    try {
+                        if (startupCheats == null)
+                            throw new java.io.IOException("Game storage is unavailable");
+                        startupCheats.toggle(id);
+                    } catch (java.io.IOException e) {
+                        view.setChecked(!enabled);
+                        toast("Cannot save init.txt: "+e.getMessage());
+                        return;
+                    }
+                }
+                if (!nativeCheatRequest(id, id >= 10 || enabled))
+                    view.setChecked(enabled != (id >= 10 || enabled));
+            });
+            panel.addView(cheat);
+        }
+        openDialog(new AlertDialog.Builder(getContext())
+            .setTitle("Cheats")
+            .setView(new ScrollView(getContext()) {
+                { this.addView(panel); }
+            })
+            .setPositiveButton("Done", null)
+            .create());
     }
 
     // ---------- the gyroscope and the vibration

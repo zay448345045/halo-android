@@ -148,6 +148,16 @@ void host_touch_bindings(const int *controls);
 /* the game's Gyro Aim for the overlay, which runs the phone's gyroscope: 0
 off, 1 on, 2 only while zoomed in */
 void host_touch_gyro_mode(int mode);
+/* the overlay's cheat menu (StartupCheats.java): the commands to run on the
+next frame, the bits of commands, and each as 0 or 1 into commands[16]; the
+bits of the pending commands, read once */
+unsigned int host_touch_cheats_read(int *commands);
+/* the overlay's, after a command ran: its result (1 or 0, -1 not available
+now) */
+void host_touch_cheat_result(int id, int status);
+/* the overlay's, with each of the ten switch cheats' state, for its [ON]
+and [OFF] labels */
+void host_touch_cheat_sync(int id, int active);
 
 /* ---------- the server browser's master servers (host_https.c) */
 

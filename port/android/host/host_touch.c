@@ -244,3 +244,82 @@ JNIEXPORT jint JNICALL Java_com_halo_decomp_TouchControls_nativeScene(JNIEnv *en
 	(void)cls;
 	return touch_scene;
 }
+
+/* The overlay's cheat menu (StartupCheats.java and TouchControls.java's
+   options): the UI thread requests a command (nativeCheatRequest) and polls
+   its state (nativeCheatStatus); the game runs it on its own thread through
+   host_touch_cheats_read and answers with host_touch_cheat_result. A command
+   stays "busy" until answered, so a request never lands while one is running. */
+static uint32_t cheat_pending, cheat_busy;
+static int32_t cheat_commands[16], cheat_status[16];
+
+JNIEXPORT jboolean JNICALL Java_com_halo_decomp_TouchControls_nativeCheatRequest(
+	JNIEnv *env, jclass cls, jint id, jboolean enabled)
+{
+	(void)env;
+	(void)cls;
+	if (id < 0 || id >= 16)
+		return JNI_FALSE;
+	pthread_mutex_lock(&touch_lock);
+	if (cheat_busy & (1u << id))
+	{
+		pthread_mutex_unlock(&touch_lock);
+		return JNI_FALSE;
+	}
+	cheat_commands[id] = enabled != 0;
+	cheat_pending |= 1u << id;
+	cheat_busy |= 1u << id;
+	pthread_mutex_unlock(&touch_lock);
+	return JNI_TRUE;
+}
+
+/* -1 before the game has answered, -2 while a command is running, else the
+result (1 or 0, or -1 not available now) */
+JNIEXPORT jint JNICALL Java_com_halo_decomp_TouchControls_nativeCheatStatus(
+	JNIEnv *env, jclass cls, jint id)
+{
+	int status;
+
+	(void)env;
+	(void)cls;
+	if (id < 0 || id >= 16)
+		return -1;
+	pthread_mutex_lock(&touch_lock);
+	status = (cheat_busy & (1u << id)) ? -2 : cheat_status[id];
+	pthread_mutex_unlock(&touch_lock);
+	return status;
+}
+
+/* the guest's, once a frame (cheats.c's android_touch_cheats_update): the
+bits of pending commands, read once, and each as 0 or 1 into commands[16] */
+unsigned int host_touch_cheats_read(int *commands)
+{
+	unsigned int pending;
+
+	pthread_mutex_lock(&touch_lock);
+	pending = cheat_pending;
+	cheat_pending = 0;
+	memcpy(commands, cheat_commands, sizeof(cheat_commands));
+	pthread_mutex_unlock(&touch_lock);
+	return pending;
+}
+
+/* the guest's, after a command ran: its result, which frees the command */
+void host_touch_cheat_result(int id, int status)
+{
+	pthread_mutex_lock(&touch_lock);
+	cheat_status[id] = status;
+	cheat_busy &= ~(1u << id);
+	pthread_mutex_unlock(&touch_lock);
+}
+
+/* the guest's, every frame: each of the ten switch cheats' state, for the
+overlay's [ON] and [OFF] labels; never while the command is busy, and only
+once it has a result of its own */
+void host_touch_cheat_sync(int id, int active)
+{
+	pthread_mutex_lock(&touch_lock);
+	if (!(cheat_busy & (1u << id)) && cheat_status[id] >= 0)
+		cheat_status[id] = active;
+	pthread_mutex_unlock(&touch_lock);
+}
