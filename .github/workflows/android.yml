@@ -101,6 +101,7 @@ jobs:
         uses: softprops/action-gh-release@v3
 #        if: startsWith(github.ref, 'refs/tags/')
         with:
+          tag_name: ${{ inputs.tag_name }}
           files: |
             dist/halo-android-release/*
             dist/halo-android-debug/*
