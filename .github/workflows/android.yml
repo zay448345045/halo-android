@@ -80,10 +80,10 @@ jobs:
           HALO_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: python3 tools/ci_build.py android debug
 
-      - name: Release
-        env:
-          HALO_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-        run: python3 tools/ci_build.py android release
+#      - name: Release
+#        env:
+#          HALO_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+#        run: python3 tools/ci_build.py android release
 
       # 触控布局及陀螺仪测试
       - name: Test the touch layout
