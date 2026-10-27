@@ -101,4 +101,5 @@ jobs:
             dist/halo-android-release/*
             dist/halo-android-debug/*
             **/*.apk
+            **/*.zip
           generate_release_notes: true
