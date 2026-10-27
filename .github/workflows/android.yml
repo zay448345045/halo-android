@@ -95,7 +95,7 @@ jobs:
       # 使用 softprops/action-gh-release 自动发布 Release 并上传构建产物
       - name: Upload binaries to Release
         uses: softprops/action-gh-release@v3
-        if: startsWith(github.ref, 'refs/tags/')
+#        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
             dist/halo-android-release/*
